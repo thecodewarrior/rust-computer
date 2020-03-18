@@ -1,0 +1,19 @@
+[package]
+name = "rust-computer"
+version = "0.1.0"
+authors = ["thecodewarrior <code@thecodewarrior.dev>"]
+edition = "2018"
+
+[[bin]]
+name = "rust_computer"
+path = "src/lib.rs"
+
+[dependencies]
+
+# ui stuff
+conrod_core = "0.68.0"
+conrod_winit = "0.68.0"
+conrod_glium = "0.68.0"
+glium = "0.24.0"
+winit = "0.19.5"
+find_folder = "*"
