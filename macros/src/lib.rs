@@ -27,7 +27,7 @@ impl Parse for TestInput {
 }
 
 #[proc_macro]
-pub fn test_bits(input: TokenStream) -> TokenStream {
+pub fn bits(input: TokenStream) -> TokenStream {
     let TestInput { expression, pattern } = parse_macro_input!(input as TestInput);
 
     let pattern_string: String = pattern.value();

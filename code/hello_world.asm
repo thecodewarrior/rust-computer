@@ -5,4 +5,4 @@ loop:
     push 0x01
     usub
     dup
-jmp_nz loop
+ujmp_nz loop

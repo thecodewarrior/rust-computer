@@ -1,35 +1,70 @@
 use super::*;
+use rust_computer_macros::bits;
 
 pub enum Insn {
     Nop,
-    Pop,
-    Dup,
-    PushValue(u32),
-    UAdd,
-    USub,
-    UMul,
-    UDiv,
-    URem,
-    Jump(u32),
-    JumpEqualZero(u32),
-    JumpNotZero(u32),
+    Stack(StackOp), // manipulate the stack (pop, dup, swap, etc.)
+    PushValue(u32), // push a value onto the stack
+    UMath(UMathOp), // perform unsigned integer math
+    IMath, // perform signed integer math - placeholder
+    FMath, // perform floating point math - placeholder
+    Jump(u32), // unconditional jump
+    UJump(UJumpOp, u32), // jump based on an unsigned integer comparison
+    IJump(u32), // jump based on an signed integer comparison - placeholder
+    FJump(u32), // jump based on an floating point comparison - placeholder
+}
+
+pub enum StackOp {
+    Pop, Dup,
+}
+
+pub enum UMathOp {
+    Add, Sub, Mul, Div, Rem,
+    LeftShift, RightShift, BitNot, BitAnd, BitOr, BitXor,
+}
+
+pub enum UJumpOp {
+    Zero, NotZero, Equal, NotEqual, LessThan, GreaterThan, LessThanOrEqual, GreaterThanOrEqual,
 }
 
 impl Insn {
     pub fn decode(memory: &Memory, pc: &mut ProgramCounter) -> CpuResult<Insn> {
+        // opcodes starting with a 1 use the last nibble as a parameter 
         Ok(match memory.read_byte(pc.advance())? {
-            0 => Insn::Nop,
-            1 => Insn::Pop,
-            2 => Insn::Dup,
-            3 => Insn::PushValue(memory.read_word(pc.advance_n(4))?),
-            4 => Insn::UAdd,
-            5 => Insn::USub,
-            6 => Insn::UMul,
-            7 => Insn::UDiv,
-            8 => Insn::URem,
-            9 => Insn::Jump(memory.read_word(pc.advance_n(4))?),
-            10 => Insn::JumpEqualZero(memory.read_word(pc.advance_n(4))?),
-            11 => Insn::JumpNotZero(memory.read_word(pc.advance_n(4))?),
+            0u8 => Insn::Nop,
+            1u8 => Insn::Stack(StackOp::Pop),
+            2u8 => Insn::Stack(StackOp::Dup),
+            3u8 => Insn::PushValue(memory.read_word(pc.advance_n(4))?),
+            4u8 => Insn::UMath(match memory.read_byte(pc.advance())? {
+                0b0000 => UMathOp::Add,
+                0b0001 => UMathOp::Sub,
+                0b0010 => UMathOp::Mul,
+                0b0011 => UMathOp::Div,
+                0b0100 => UMathOp::Rem,
+                0b0101 => UMathOp::LeftShift,
+                0b0110 => UMathOp::RightShift,
+                0b0111 => UMathOp::BitNot,
+                0b1000 => UMathOp::BitAnd,
+                0b1001 => UMathOp::BitOr,
+                0b1010 => UMathOp::BitXor,
+                _ => return Err(CpuPanic::new()),
+            }),
+            5u8 => Insn::IMath,
+            6u8 => Insn::FMath,
+            7u8 => Insn::Jump(memory.read_word(pc.advance_n(4))?),
+            8u8 => Insn::UJump(match memory.read_byte(pc.advance())? {
+                0b0000 => UJumpOp::Zero,
+                0b0001 => UJumpOp::NotZero,
+                0b0010 => UJumpOp::Equal,
+                0b0011 => UJumpOp::NotEqual,
+                0b0100 => UJumpOp::LessThan,
+                0b0101 => UJumpOp::GreaterThan,
+                0b0110 => UJumpOp::LessThanOrEqual,
+                0b0111 => UJumpOp::GreaterThanOrEqual,
+                _ => return Err(CpuPanic::new()),
+            }, memory.read_word(pc.advance_n(4))?),
+            9u8 => Insn::IJump(memory.read_word(pc.advance_n(4))?),
+            10u8 => Insn::FJump(memory.read_word(pc.advance_n(4))?),
             _ => return Err(CpuPanic::new()),
         })
     }
