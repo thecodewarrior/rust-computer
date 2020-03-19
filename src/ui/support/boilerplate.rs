@@ -1,13 +1,17 @@
+use super::interop;
 use conrod_core::{Ui, UiCell};
 use glium::Surface;
-use super::interop;
-use std::time::{Instant, Duration};
+use std::time::{Duration, Instant};
 
 pub trait ConrodApp {
     fn frame(&mut self, ui: &mut UiCell);
-} 
+    fn frame_time(&self) -> Duration;
+}
 
-pub fn conrod_launch<A: ConrodApp, F>(title: &str, width: u32, height: u32, setup: F) where F: Fn(&mut Ui, std::path::PathBuf) -> A {
+pub fn conrod_launch<A: ConrodApp, F>(title: &str, width: u32, height: u32, setup: F)
+where
+    F: Fn(&mut Ui, std::path::PathBuf) -> A,
+{
     // Build the window.
     let mut events_loop = glium::glutin::EventsLoop::new();
     let window = glium::glutin::WindowBuilder::new()
@@ -31,38 +35,38 @@ pub fn conrod_launch<A: ConrodApp, F>(title: &str, width: u32, height: u32, setu
 
     let mut events = Vec::new();
 
-
     // Add a `Font` to the `UI`'s `font::Map` from file.
-    let assets = find_folder::Search::KidsThenParents(3, 5).for_folder("assets").unwrap();
+    let assets = find_folder::Search::KidsThenParents(3, 5)
+        .for_folder("assets")
+        .unwrap();
 
     let mut app = setup(&mut ui, assets);
 
-    let mut last_frame = Instant::now();
-    let frame_time = Duration::from_secs_f32(1./30.);
     'render: loop {
+        let frame_start = Instant::now();
         events.clear();
 
         // Get all the new events since the last frame.
-        events_loop.poll_events(|event| { events.push(event); });
+        events_loop.poll_events(|event| {
+            events.push(event);
+        });
 
         // Process the events.
         for event in events.drain(..) {
-
             // Break from the loop upon `Escape` or closed window.
             match event.clone() {
-                glium::glutin::Event::WindowEvent { event, .. } => {
-                    match event {
-                        glium::glutin::WindowEvent::CloseRequested |
-                        glium::glutin::WindowEvent::KeyboardInput {
-                            input: glium::glutin::KeyboardInput {
+                glium::glutin::Event::WindowEvent { event, .. } => match event {
+                    glium::glutin::WindowEvent::CloseRequested
+                    | glium::glutin::WindowEvent::KeyboardInput {
+                        input:
+                            glium::glutin::KeyboardInput {
                                 virtual_keycode: Some(glium::glutin::VirtualKeyCode::Escape),
                                 ..
                             },
-                            ..
-                        } => break 'render,
-                        _ => (),
-                    }
-                }
+                        ..
+                    } => break 'render,
+                    _ => (),
+                },
                 _ => (),
             };
 
@@ -88,9 +92,10 @@ pub fn conrod_launch<A: ConrodApp, F>(title: &str, width: u32, height: u32, setu
             target.finish().unwrap();
         }
 
-        let now_time = Instant::now();
-        let delta = now_time.duration_since(last_frame);
-        last_frame = now_time;
+        let frame_time = app.frame_time();
+
+        let frame_end = Instant::now();
+        let delta = frame_end.duration_since(frame_start);
         if delta < frame_time {
             std::thread::sleep(frame_time - delta);
         }

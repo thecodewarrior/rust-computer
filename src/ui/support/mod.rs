@@ -1,4 +1,4 @@
-mod interop;
 mod boilerplate;
+mod interop;
 
-pub use boilerplate::{ConrodApp, conrod_launch};
+pub use boilerplate::{conrod_launch, ConrodApp};

@@ -17,7 +17,9 @@
                     "kind": "bin"
                 }
             },
-            "args": [],
+            "args": [
+                "code/hello_world.bin"
+            ],
             "cwd": "${workspaceFolder}"
         }
     ]
