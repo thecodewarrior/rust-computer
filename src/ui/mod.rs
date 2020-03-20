@@ -1,4 +1,6 @@
+pub mod worker;
 pub mod main;
-mod support;
 
-pub use main::ui_main;
+pub fn ui_main() {
+    main::main();
+}

@@ -12,9 +12,4 @@ path = "src/lib.rs"
 rust-computer-macros = { path = "./macros" }
 
 # ui stuff
-conrod_core = "0.68.0"
-conrod_winit = "0.68.0"
-conrod_glium = "0.68.0"
-glium = "0.24.0"
-winit = "0.19.5"
-find_folder = "*"
+druid = { git = "https://github.com/xi-editor/druid.git", version = "0.5" }
