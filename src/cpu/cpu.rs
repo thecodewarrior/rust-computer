@@ -2,15 +2,13 @@ use super::*;
 use crate::cpu::CpuResult;
 
 pub struct Cpu {
-    pub stack: Vec<u32>,
-    pub frames: Vec<Vec<u32>>,
+    pub frames: Vec<StackFrame>,
     pub program_counter: ProgramCounter,
 }
 
 impl Cpu {
     pub fn new() -> Cpu {
         Cpu {
-            stack: Vec::new(),
             frames: Vec::new(),
             program_counter: ProgramCounter::new(0),
         }
@@ -26,62 +24,82 @@ impl Cpu {
                 use super::StackOp::*;
                 match op {
                     Pop => {
-                        self.pop();
+                        self.frame().pop();
                     }
                     Dup => {
-                        let value = self.pop();
-                        self.push2(value, value);
+                        let value = self.frame().pop();
+                        self.frame().push2(value, value);
+                    }
+                    Swap => {
+                        let (a, b) = self.frame().pop2();
+                        self.frame().push2(b, a);
+                    }
+                    PushValue(value) => {
+                        self.frame().push(value);
+                    }
+                    PushFrame(size) => {
+                        self.frames.push(StackFrame::new(size));
+                    }
+                    PopFrame => {
+                        self.frames.pop().expect("no frames");
+                    }
+                    Store(var) => {
+                        let value = self.frame().pop();
+                        self.frame().store(var, value);
+                    }
+                    Load(var) => {
+                        let value = self.frame().load(var);
+                        self.frame().push(value);
                     }
                 }
             }
-            PushValue(value) => self.push(value),
+
             UMath(op) => {
                 use super::UMathOp::*;
                 match op {
                     Add => {
-                        let (a, b) = self.pop2();
-                        self.push(a + b);
+                        let (a, b) = self.frame().pop2();
+                        self.frame().push(a + b);
                     }
                     Sub => {
-                        let (a, b) = self.pop2();
-                        self.push(a - b);
+                        let (a, b) = self.frame().pop2();
+                        self.frame().push(a - b);
                     }
                     Mul => {
-                        let (a, b) = self.pop2();
-                        self.push(a * b);
+                        let (a, b) = self.frame().pop2();
+                        self.frame().push(a * b);
                     }
                     Div => {
-                        let (a, b) = self.pop2();
-                        self.push(a / b);
+                        let (a, b) = self.frame().pop2();
+                        self.frame().push(a / b);
                     }
                     Rem => {
-                        let (a, b) = self.pop2();
-                        self.push(a % b);
+                        let (a, b) = self.frame().pop2();
+                        self.frame().push(a % b);
                     }
-
                     LeftShift => {
-                        let (a, b) = self.pop2();
-                        self.push(a << b);
+                        let (a, b) = self.frame().pop2();
+                        self.frame().push(a << b);
                     }
                     RightShift => {
-                        let (a, b) = self.pop2();
-                        self.push(a >> b);
+                        let (a, b) = self.frame().pop2();
+                        self.frame().push(a >> b);
                     }
                     BitNot => {
-                        let value = self.pop();
-                        self.push(!value);
+                        let value = self.frame().pop();
+                        self.frame().push(!value);
                     }
                     BitAnd => {
-                        let (a, b) = self.pop2();
-                        self.push(a & b);
+                        let (a, b) = self.frame().pop2();
+                        self.frame().push(a & b);
                     }
                     BitOr => {
-                        let (a, b) = self.pop2();
-                        self.push(a | b);
+                        let (a, b) = self.frame().pop2();
+                        self.frame().push(a | b);
                     }
                     BitXor => {
-                        let (a, b) = self.pop2();
-                        self.push(a ^ b);
+                        let (a, b) = self.frame().pop2();
+                        self.frame().push(a ^ b);
                     }
                 }
             }
@@ -92,30 +110,30 @@ impl Cpu {
             UJump(op, dest) => {
                 use super::UJumpOp::*;
                 let test = match op {
-                    Zero => self.pop() == 0,
-                    NotZero => self.pop() != 0,
+                    Zero => self.frame().pop() == 0,
+                    NotZero => self.frame().pop() != 0,
                     Equal => {
-                        let (a, b) = self.pop2();
+                        let (a, b) = self.frame().pop2();
                         a == b
                     }
                     NotEqual => {
-                        let (a, b) = self.pop2();
+                        let (a, b) = self.frame().pop2();
                         a != b
                     }
                     LessThan => {
-                        let (a, b) = self.pop2();
+                        let (a, b) = self.frame().pop2();
                         a < b
                     }
                     GreaterThan => {
-                        let (a, b) = self.pop2();
+                        let (a, b) = self.frame().pop2();
                         a > b
                     }
                     LessThanOrEqual => {
-                        let (a, b) = self.pop2();
+                        let (a, b) = self.frame().pop2();
                         a <= b
                     }
                     GreaterThanOrEqual => {
-                        let (a, b) = self.pop2();
+                        let (a, b) = self.frame().pop2();
                         a >= b
                     }
                 };
@@ -128,6 +146,26 @@ impl Cpu {
         }
 
         Ok(())
+    }
+
+    pub fn frame(&mut self) -> &mut StackFrame {
+        self.frames.last_mut().expect("no frames")
+    }
+
+}
+
+
+pub struct StackFrame {
+    pub stack: Vec<u32>,
+    pub vars: Vec<u32>
+}
+
+impl StackFrame {
+    fn new(size: u32) -> StackFrame {
+        StackFrame {
+            stack: vec![],
+            vars: vec![0; size as usize]
+        }
     }
 
     fn pop(&mut self) -> u32 {
@@ -163,5 +201,13 @@ impl Cpu {
     fn push2(&mut self, a: u32, b: u32) {
         self.stack.push(a);
         self.stack.push(b);
+    }
+
+    fn store(&mut self, var: u32, value: u32) {
+        *self.vars.get_mut(var as usize).expect("var is out of bounds") = value;
+    }
+
+    fn load(&self, var: u32) -> u32 {
+        *self.vars.get(var as usize).expect("var is out of bounds")
     }
 }

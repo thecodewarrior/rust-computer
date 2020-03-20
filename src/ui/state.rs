@@ -10,6 +10,7 @@ pub struct UiSimState {
 pub struct UiCpuState {
     pub program_counter: u32,
     pub stack: Arc<Vec<u32>>,
+    pub vars: Arc<Vec<u32>>,
 }
 
 impl UiSimState {
@@ -18,6 +19,7 @@ impl UiSimState {
             cpu: UiCpuState {
                 program_counter: 0,
                 stack: Arc::new(vec![]),
+                vars: Arc::new(vec![]),
             },
         }
     }

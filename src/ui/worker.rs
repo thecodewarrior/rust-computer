@@ -21,7 +21,7 @@ pub struct SimulatorState {
 impl SimulatorHandle {
     pub fn new() -> SimulatorHandle {
         let thread_state = Arc::new(RwLock::new(SimulatorThreadState {
-            frequency: 1.,
+            frequency: 5.,
             paused: PauseState::new(true),
         }));
         let sim_state = Arc::new(RwLock::new(SimulatorState {

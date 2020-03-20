@@ -4,7 +4,6 @@ use rust_computer_macros::bits;
 pub enum Insn {
     Nop,
     Stack(StackOp),      // manipulate the stack (pop, dup, swap, etc.)
-    PushValue(u32),      // push a value onto the stack
     UMath(UMathOp),      // perform unsigned integer math
     IMath,               // perform signed integer math - placeholder
     FMath,               // perform floating point math - placeholder
@@ -17,6 +16,13 @@ pub enum Insn {
 pub enum StackOp {
     Pop,
     Dup,
+    Swap,
+    PushValue(u32),
+
+    PushFrame(u32),
+    PopFrame,
+    Store(u32),
+    Load(u32),
 }
 
 pub enum UMathOp {
@@ -49,9 +55,17 @@ impl Insn {
         // opcodes starting with a 1 use the last nibble as a parameter
         Ok(match memory.read_byte(pc.advance())? {
             0u8 => Insn::Nop,
-            1u8 => Insn::Stack(StackOp::Pop),
-            2u8 => Insn::Stack(StackOp::Dup),
-            3u8 => Insn::PushValue(memory.read_word(pc.advance_n(4))?),
+            1u8 => Insn::Stack(match memory.read_byte(pc.advance())? {
+                0b0000 => StackOp::Pop,
+                0b0001 => StackOp::Dup,
+                0b0010 => StackOp::Swap,
+                0b0011 => StackOp::PushValue(memory.read_word(pc.advance_n(4))?),
+                0b0100 => StackOp::PushFrame(memory.read_word(pc.advance_n(4))?),
+                0b0101 => StackOp::PopFrame,
+                0b0110 => StackOp::Store(memory.read_word(pc.advance_n(4))?),
+                0b0111 => StackOp::Load(memory.read_word(pc.advance_n(4))?),
+                _ => return Err(CpuPanic::new()),
+            }),
             4u8 => Insn::UMath(match memory.read_byte(pc.advance())? {
                 0b0000 => UMathOp::Add,
                 0b0001 => UMathOp::Sub,

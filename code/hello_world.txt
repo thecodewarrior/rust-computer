@@ -1,8 +1,39 @@
  outp | addr | data
 
-  0:0 |    0 | 03 00 00 01 00 ; push 0x100
-  5:0 |    5 |                ; loop:
-  5:0 |    5 | 03 00 00 00 01 ; push 0x01
-  a:0 |    a | 04 01          ; usub
-  c:0 |    c | 02             ; dup
-  d:0 |    d | 08 01 00 00 00 05 ; ujmp_nz loop
+  0:0 |    0 |                ; findprimes:
+  0:0 |    0 | 01 04 00 00 00 01 ; frame 1
+  6:0 |    6 | 01 03 00 00 00 01 ; push 1
+  c:0 |    c | 01 06 00 00 00 00 ; store .maybe_prime
+ 12:0 |   12 |                ; .not_prime:
+ 12:0 |   12 | 01 07 00 00 00 00 ; load .maybe_prime
+ 18:0 |   18 | 01 03 00 00 00 02 ; push 2
+ 1e:0 |   1e | 04 00          ; uadd
+ 20:0 |   20 | 01 06 00 00 00 00 ; store .maybe_prime
+ 26:0 |   26 | 01 03 00 00 00 02 ; push 2
+ 2c:0 |   2c |                ; .test_loop:
+ 2c:0 |   2c | 01 01          ; dup
+ 2e:0 |   2e | 01 07 00 00 00 00 ; load .maybe_prime
+ 34:0 |   34 | 01 02          ; swap
+ 36:0 |   36 | 04 04          ; urem
+ 38:0 |   38 | 08 00 00 00 00 4b ; ujmp_ez .divisible
+ 3e:0 |   3e | 01 03 00 00 00 01 ; push 1
+ 44:0 |   44 | 04 00          ; uadd
+ 46:0 |   46 | 07 00 00 00 2c ; jmp .test_loop
+ 4b:0 |   4b |                ; .divisible:
+ 4b:0 |   4b | 01 07 00 00 00 00 ; load .maybe_prime
+ 51:0 |   51 | 08 03 00 00 00 12 ; ujmp_ne .not_prime
+ 57:0 |   57 | 01 07 00 00 00 00 ; load .maybe_prime
+ 5d:0 |   5d | 01 01          ; dup
+ 5f:0 |   5f | 01 01          ; dup
+ 61:0 |   61 | 01 01          ; dup
+ 63:0 |   63 | 01 01          ; dup
+ 65:0 |   65 | 01 01          ; dup
+ 67:0 |   67 | 01 01          ; dup
+ 69:0 |   69 | 01 00          ; pop
+ 6b:0 |   6b | 01 00          ; pop
+ 6d:0 |   6d | 01 00          ; pop
+ 6f:0 |   6f | 01 00          ; pop
+ 71:0 |   71 | 01 00          ; pop
+ 73:0 |   73 | 01 00          ; pop
+ 75:0 |   75 | 01 00          ; pop
+ 77:0 |   77 | 07 00 00 00 12 ; jmp .not_prime

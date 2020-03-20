@@ -80,6 +80,25 @@ fn make_main_ui() -> impl Widget<AppData> {
                     .padding(3.0),
                 )
                 .with_child(
+                    Label::new("Vars")
+                        .align_vertical(UnitPoint::LEFT)
+                        .padding(3.0),
+                )
+                .with_flex_child(
+                    Scroll::new(List::new(|| {
+                        Label::new(|item: &u32, _env: &_| format!("0x{:08x}", item))
+                            .align_vertical(UnitPoint::LEFT)
+                            .padding(3.0)
+                    }))
+                    .vertical()
+                    .lens(
+                        AppData::sim_state
+                            .then(UiSimState::cpu)
+                            .then(UiCpuState::vars),
+                    ),
+                    1.0,
+                )
+                .with_child(
                     Label::new("Stack")
                         .align_vertical(UnitPoint::LEFT)
                         .padding(3.0),
@@ -97,7 +116,7 @@ fn make_main_ui() -> impl Widget<AppData> {
                             .then(UiCpuState::stack),
                     ),
                     1.0,
-                ),
+                )
         )
         .with_flex_spacer(1.)
         .background(BG)
@@ -126,9 +145,20 @@ impl Widget<AppData> for SimStateReader {
                         let sim_state = data.sim_handle.sim_state.read().unwrap();
                         data.sim_state.cpu.program_counter =
                             sim_state.computer.cpu.program_counter.address;
-                        let stack: &mut Vec<u32> = Arc::make_mut(&mut data.sim_state.cpu.stack);
-                        stack.clear();
-                        stack.clone_from(&sim_state.computer.cpu.stack);
+                        {
+                            let stack: &mut Vec<u32> = Arc::make_mut(&mut data.sim_state.cpu.stack);
+                            stack.clear();
+                            if let Some(ref frame) = sim_state.computer.cpu.frames.last() {
+                                stack.clone_from(&frame.stack);
+                            }
+                        }
+                        {
+                            let vars: &mut Vec<u32> = Arc::make_mut(&mut data.sim_state.cpu.vars);
+                            vars.clear();
+                            if let Some(ref frame) = sim_state.computer.cpu.frames.last() {
+                                vars.clone_from(&frame.vars);
+                            }
+                        }
                     }
                     let deadline = Instant::now() + Duration::from_millis(100 as u64);
                     self.timer_id = ctx.request_timer(deadline);
