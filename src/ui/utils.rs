@@ -1,6 +1,6 @@
-use std::sync::{Mutex, Condvar};
-use std::time::{Instant, Duration};
- 
+use std::sync::{Condvar, Mutex};
+use std::time::{Duration, Instant};
+
 pub struct PauseState {
     mutex: Mutex<bool>,
     condvar: Condvar,

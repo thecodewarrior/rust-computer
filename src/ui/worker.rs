@@ -1,6 +1,6 @@
-use std::time::{Duration, Instant};
+use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::thread;
-use std::sync::{Arc, Mutex, Condvar, RwLock};
+use std::time::{Duration, Instant};
 // use crate::Computer;
 use super::super::Computer; // crate:: doesn't seem to work with vscode. possibly related to rust issue#69933?
 use super::utils::*;
@@ -11,21 +11,21 @@ pub struct SimulatorHandle {
     pub sim_state: Arc<RwLock<SimulatorState>>,
 }
 pub struct SimulatorThreadState {
-    pub frequency: f64, 
-    pub paused: PauseState
+    pub frequency: f64,
+    pub paused: PauseState,
 }
 pub struct SimulatorState {
-    pub computer: Computer 
+    pub computer: Computer,
 }
 
 impl SimulatorHandle {
     pub fn new() -> SimulatorHandle {
-        let thread_state = Arc::new(RwLock::new(SimulatorThreadState { 
+        let thread_state = Arc::new(RwLock::new(SimulatorThreadState {
             frequency: 1.,
             paused: PauseState::new(true),
         }));
         let sim_state = Arc::new(RwLock::new(SimulatorState {
-            computer: Computer::new(65536)
+            computer: Computer::new(65536),
         }));
 
         let thread_state_clone = Arc::clone(&thread_state);
@@ -35,18 +35,23 @@ impl SimulatorHandle {
         });
 
         SimulatorHandle {
-            handle, thread_state, sim_state
+            handle,
+            thread_state,
+            sim_state,
         }
     }
 }
 
-fn run_simulation(thread_state_lock: Arc<RwLock<SimulatorThreadState>>, sim_state_lock: Arc<RwLock<SimulatorState>>) {
+fn run_simulation(
+    thread_state_lock: Arc<RwLock<SimulatorThreadState>>,
+    sim_state_lock: Arc<RwLock<SimulatorState>>,
+) {
     loop {
         let target_duration: Duration;
         {
             let thread_state = thread_state_lock.read().unwrap();
             thread_state.paused.wait_if_paused();
-            target_duration = Duration::from_secs_f64(1./thread_state.frequency);
+            target_duration = Duration::from_secs_f64(1. / thread_state.frequency);
         }
 
         let start_time = Instant::now();

@@ -1,21 +1,24 @@
 use std::ops::{Index, IndexMut};
 use std::time::{Duration, Instant};
 
-use druid::widget::{Scroll, List, Button, Flex, Label, Slider, WidgetExt, FlexParams, MainAxisAlignment, CrossAxisAlignment};
+use super::state::*;
+use super::worker::{SimulatorHandle, SimulatorState};
+use druid::lens::{self, LensExt};
+use druid::widget::{
+    Button, CrossAxisAlignment, Flex, FlexParams, Label, List, MainAxisAlignment, Scroll, Slider,
+    WidgetExt,
+};
 use druid::{
     AppLauncher, BoxConstraints, Color, Data, Env, Event, EventCtx, LayoutCtx, Lens, LifeCycle,
     LifeCycleCtx, LocalizedString, MouseButton, PaintCtx, Point, Rect, RenderContext, Size,
-    TimerToken, UpdateCtx, Widget, WindowDesc, UnitPoint, 
+    TimerToken, UnitPoint, UpdateCtx, Widget, WindowDesc,
 };
-use druid::lens::{self, LensExt,};
-use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
-use std::rc::Rc;
 use std::env;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
-use super::state::*;
-use super::worker::{SimulatorHandle, SimulatorState};
+use std::rc::Rc;
+use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 const BG: Color = Color::grey8(23_u8);
 
@@ -44,7 +47,7 @@ pub fn ui_main() {
         .use_simple_logger()
         .launch(AppData {
             sim_state,
-            sim_handle
+            sim_handle,
         })
         .expect("launch failed");
 }
@@ -62,37 +65,42 @@ pub fn setup_sim(sim_handle: &SimulatorHandle) {
 
 fn make_main_ui() -> impl Widget<AppData> {
     Flex::row()
-    .with_child(SimStateReader {
-        timer_id: TimerToken::INVALID,
-    })
-    .with_child(
-        Flex::column()
-        .main_axis_alignment(MainAxisAlignment::Start)
-        .cross_axis_alignment(CrossAxisAlignment::Start)
-        .must_fill_main_axis(true)
+        .with_child(SimStateReader {
+            timer_id: TimerToken::INVALID,
+        })
         .with_child(
-            Label::new(|data: &AppData, _env: &_| format!("PC: 0x{:08x}", data.sim_state.cpu.program_counter))
-                .padding(3.0)
+            Flex::column()
+                .main_axis_alignment(MainAxisAlignment::Start)
+                .cross_axis_alignment(CrossAxisAlignment::Start)
+                .must_fill_main_axis(true)
+                .with_child(
+                    Label::new(|data: &AppData, _env: &_| {
+                        format!("PC: 0x{:08x}", data.sim_state.cpu.program_counter)
+                    })
+                    .padding(3.0),
+                )
+                .with_child(
+                    Label::new("Stack")
+                        .align_vertical(UnitPoint::LEFT)
+                        .padding(3.0),
+                )
+                .with_flex_child(
+                    Scroll::new(List::new(|| {
+                        Label::new(|item: &u32, _env: &_| format!("0x{:08x}", item))
+                            .align_vertical(UnitPoint::LEFT)
+                            .padding(3.0)
+                    }))
+                    .vertical()
+                    .lens(
+                        AppData::sim_state
+                            .then(UiSimState::cpu)
+                            .then(UiCpuState::stack),
+                    ),
+                    1.0,
+                ),
         )
-        .with_child(
-            Label::new("Stack")
-                .align_vertical(UnitPoint::LEFT)
-                .padding(3.0)
-        )
-        .with_flex_child(
-            Scroll::new(List::new(|| {
-                Label::new(|item: &u32, _env: &_| format!("0x{:08x}", item))
-                    .align_vertical(UnitPoint::LEFT)
-                    .padding(3.0)
-            }))
-            .vertical()
-            .lens(AppData::sim_state.then(UiSimState::cpu).then(UiCpuState::stack)),
-            1.0,
-        )
-
-    )
-    .with_flex_spacer(1.)
-    .background(BG)
+        .with_flex_spacer(1.)
+        .background(BG)
 }
 
 struct SimStateReader {
@@ -103,24 +111,29 @@ impl Widget<AppData> for SimStateReader {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut AppData, _env: &Env) {
         match event {
             Event::WindowConnected => {
-                data.sim_handle.thread_state.read().unwrap().paused.set_paused(false);
+                data.sim_handle
+                    .thread_state
+                    .read()
+                    .unwrap()
+                    .paused
+                    .set_paused(false);
                 let deadline = Instant::now() + Duration::from_millis(100 as u64);
                 self.timer_id = ctx.request_timer(deadline);
-            },
+            }
             Event::Timer(id) => {
                 if *id == self.timer_id {
                     {
                         let sim_state = data.sim_handle.sim_state.read().unwrap();
-                        data.sim_state.cpu.program_counter = sim_state.computer.cpu.program_counter.address;
+                        data.sim_state.cpu.program_counter =
+                            sim_state.computer.cpu.program_counter.address;
                         let stack: &mut Vec<u32> = Arc::make_mut(&mut data.sim_state.cpu.stack);
                         stack.clear();
                         stack.clone_from(&sim_state.computer.cpu.stack);
                     }
-                    let deadline =
-                        Instant::now() + Duration::from_millis(100 as u64);
+                    let deadline = Instant::now() + Duration::from_millis(100 as u64);
                     self.timer_id = ctx.request_timer(deadline);
                 }
-            },
+            }
             _ => (),
         }
     }

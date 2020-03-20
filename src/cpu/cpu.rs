@@ -17,120 +17,114 @@ impl Cpu {
     }
 
     pub fn tick(&mut self, memory: &mut Memory) -> CpuResult<()> {
-        // store the address from before decoding increments it.
-        let insn_address = self.program_counter.address;
         let insn = Insn::decode(memory, &mut self.program_counter)?;
 
         use super::Insn::*;
         match insn {
             Nop => {}
-            Stack(op) => { 
+            Stack(op) => {
                 use super::StackOp::*;
                 match op {
                     Pop => {
                         self.pop();
-                    },
+                    }
                     Dup => {
-                        let value = self.pop(); 
+                        let value = self.pop();
                         self.push2(value, value);
                     }
                 }
-            },
-            PushValue(value) => {
-                self.push(value)
-            },
+            }
+            PushValue(value) => self.push(value),
             UMath(op) => {
                 use super::UMathOp::*;
                 match op {
                     Add => {
                         let (a, b) = self.pop2();
                         self.push(a + b);
-                    },
+                    }
                     Sub => {
                         let (a, b) = self.pop2();
                         self.push(a - b);
-                    },
+                    }
                     Mul => {
                         let (a, b) = self.pop2();
                         self.push(a * b);
-                    },
+                    }
                     Div => {
                         let (a, b) = self.pop2();
                         self.push(a / b);
-                    },
+                    }
                     Rem => {
                         let (a, b) = self.pop2();
                         self.push(a % b);
-                    },
+                    }
 
                     LeftShift => {
                         let (a, b) = self.pop2();
                         self.push(a << b);
-                    },
+                    }
                     RightShift => {
                         let (a, b) = self.pop2();
                         self.push(a >> b);
-                    },
+                    }
                     BitNot => {
                         let value = self.pop();
                         self.push(!value);
-                    },
+                    }
                     BitAnd => {
                         let (a, b) = self.pop2();
                         self.push(a & b);
-                    },
+                    }
                     BitOr => {
                         let (a, b) = self.pop2();
                         self.push(a | b);
-                    },
+                    }
                     BitXor => {
                         let (a, b) = self.pop2();
                         self.push(a ^ b);
-                    },
+                    }
                 }
             }
-            IMath => {},
-            FMath => {},
+            IMath => {}
+            FMath => {}
 
-            Jump(dest) => {
-                self.program_counter.address = dest 
-            },
+            Jump(dest) => self.program_counter.address = dest,
             UJump(op, dest) => {
                 use super::UJumpOp::*;
                 let test = match op {
-                    Zero => { self.pop() == 0 },
-                    NotZero => { self.pop() != 0 },
-                    Equal => { 
+                    Zero => self.pop() == 0,
+                    NotZero => self.pop() != 0,
+                    Equal => {
                         let (a, b) = self.pop2();
                         a == b
-                    },
-                    NotEqual => { 
+                    }
+                    NotEqual => {
                         let (a, b) = self.pop2();
                         a != b
-                    },
-                    LessThan => { 
+                    }
+                    LessThan => {
                         let (a, b) = self.pop2();
                         a < b
-                    },
-                    GreaterThan => { 
+                    }
+                    GreaterThan => {
                         let (a, b) = self.pop2();
                         a > b
-                    },
-                    LessThanOrEqual => { 
+                    }
+                    LessThanOrEqual => {
                         let (a, b) = self.pop2();
                         a <= b
-                    },
-                    GreaterThanOrEqual => { 
+                    }
+                    GreaterThanOrEqual => {
                         let (a, b) = self.pop2();
                         a >= b
-                    },
+                    }
                 };
                 if test {
                     self.program_counter.address = dest;
                 }
-            },
-            IJump(_)=> {},
-            FJump(_) => {},
+            }
+            IJump(_) => {}
+            FJump(_) => {}
         }
 
         Ok(())
@@ -146,14 +140,19 @@ impl Cpu {
         (a, b)
     }
 
+    #[allow(unused)]
     fn peek(&self) -> u32 {
         *self.stack.last().expect("stack empty")
     }
 
+    #[allow(unused)]
     fn peek2(&self) -> (u32, u32) {
         (
-            *self.stack.get(self.stack.len()-2).expect("stack only had one element"),
-            *self.stack.get(self.stack.len()-1).expect("stack empty"),
+            *self
+                .stack
+                .get(self.stack.len() - 2)
+                .expect("stack only had one element"),
+            *self.stack.get(self.stack.len() - 1).expect("stack empty"),
         )
     }
 
