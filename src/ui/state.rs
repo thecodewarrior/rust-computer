@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use druid::{Data, Lens};
 
 #[derive(Clone, Data, Lens)]
@@ -5,9 +6,10 @@ pub struct UiSimState {
     pub cpu: UiCpuState,
 }
 
-#[derive(Clone, Data)]
+#[derive(Clone, Data, Lens)]
 pub struct UiCpuState {
     pub program_counter: u32,
+    pub stack: Arc<Vec<u32>>
 }
 
 impl UiSimState {
@@ -15,6 +17,7 @@ impl UiSimState {
         UiSimState {
             cpu: UiCpuState {
                 program_counter: 0,
+                stack: Arc::new(vec![])
             }
         }
     }
