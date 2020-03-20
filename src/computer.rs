@@ -14,9 +14,7 @@ impl Computer {
         }
     }
 
-    pub fn tick(&mut self) -> CpuResult<()> {
-        self.cpu.tick(&mut self.memory)?;
-
-        Ok(())
+    pub fn tick(&mut self) {
+        self.cpu.tick(&mut self.memory);
     }
 }
