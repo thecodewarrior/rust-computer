@@ -61,12 +61,17 @@ pub fn setup_sim(sim_handle: &SimulatorHandle) {
     f.read_to_end(&mut buffer);
     let limit = std::cmp::min(sim_state.computer.memory.data.len(), buffer.len());
     sim_state.computer.memory.data[..limit].copy_from_slice(&buffer[..limit]);
+
+    let mut thread_state = sim_handle.thread_state.write().unwrap();
+    thread_state.paused.set_paused(false);
+    thread_state.frequency = 2_000_000.;
 }
 
 fn make_main_ui() -> impl Widget<AppData> {
     Flex::row()
         .with_child(SimStateReader {
             timer_id: TimerToken::INVALID,
+            ui_ups: 10.,
         })
         .with_child(
             Flex::column()
@@ -76,6 +81,12 @@ fn make_main_ui() -> impl Widget<AppData> {
                 .with_child(
                     Label::new(|data: &AppData, _env: &_| {
                         format!("PC: 0x{:08x}", data.sim_state.cpu.program_counter)
+                    })
+                    .padding(3.0),
+                )
+                .with_child(
+                    Label::new(|data: &AppData, _env: &_| {
+                        format!("{} Hz", data.sim_state.actual_frequency)
                     })
                     .padding(3.0),
                 )
@@ -124,23 +135,27 @@ fn make_main_ui() -> impl Widget<AppData> {
 
 struct SimStateReader {
     timer_id: TimerToken,
+    ui_ups: f64,
 }
 
 impl Widget<AppData> for SimStateReader {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut AppData, _env: &Env) {
         match event {
             Event::WindowConnected => {
-                data.sim_handle
-                    .thread_state
-                    .read()
-                    .unwrap()
-                    .paused
-                    .set_paused(false);
-                let deadline = Instant::now() + Duration::from_millis(100 as u64);
+                let deadline = Instant::now() + Duration::from_secs_f64(1. / self.ui_ups);
                 self.timer_id = ctx.request_timer(deadline);
             }
             Event::Timer(id) => {
                 if *id == self.timer_id {
+                    {
+                        let mut thread_state = data.sim_handle
+                            .thread_state
+                            .write()
+                            .unwrap();
+                        thread_state.ui_frequency = self.ui_ups;
+                        data.sim_state.actual_frequency = thread_state.actual_frequency;
+                    }
+
                     {
                         let sim_state = data.sim_handle.sim_state.read().unwrap();
                         data.sim_state.cpu.program_counter =
@@ -160,7 +175,7 @@ impl Widget<AppData> for SimStateReader {
                             }
                         }
                     }
-                    let deadline = Instant::now() + Duration::from_millis(100 as u64);
+                    let deadline = Instant::now() + Duration::from_secs_f64(1. / self.ui_ups);
                     self.timer_id = ctx.request_timer(deadline);
                 }
             }

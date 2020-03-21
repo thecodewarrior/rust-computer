@@ -4,6 +4,7 @@ use std::sync::Arc;
 #[derive(Clone, Data, Lens)]
 pub struct UiSimState {
     pub cpu: UiCpuState,
+    pub actual_frequency: f64
 }
 
 #[derive(Clone, Data, Lens)]
@@ -21,6 +22,7 @@ impl UiSimState {
                 stack: Arc::new(vec![]),
                 vars: Arc::new(vec![]),
             },
+            actual_frequency: 0.
         }
     }
 }
