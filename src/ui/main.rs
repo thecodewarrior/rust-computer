@@ -64,7 +64,7 @@ pub fn setup_sim(sim_handle: &SimulatorHandle) {
 
     let mut thread_state = sim_handle.thread_state.write().unwrap();
     thread_state.paused.set_paused(false);
-    thread_state.frequency = 2_000_000.;
+    thread_state.frequency = 8_000_000.;
 }
 
 fn make_main_ui() -> impl Widget<AppData> {

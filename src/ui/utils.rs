@@ -1,5 +1,7 @@
 use std::sync::{Condvar, Mutex};
 use std::time::{Duration, Instant};
+use std::cmp::{max, min};
+use std::thread;
 
 pub struct PauseState {
     mutex: Mutex<bool>,
@@ -14,11 +16,13 @@ impl PauseState {
         }
     }
 
-    pub fn wait_if_paused(&self) {
+    pub fn wait_if_paused(&self) -> bool {
         let mut paused = self.mutex.lock().unwrap();
+        let did_pause = *paused;
         while *paused {
             paused = self.condvar.wait(paused).unwrap();
         }
+        did_pause
     }
 
     pub fn set_paused(&self, new_state: bool) {

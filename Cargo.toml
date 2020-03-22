@@ -13,3 +13,4 @@ rust-computer-macros = { path = "./macros" }
 
 # ui stuff
 druid = { git = "https://github.com/xi-editor/druid.git", version = "0.5" }
+spin_sleep = "0.3"
