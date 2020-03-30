@@ -1,7 +1,7 @@
-use std::sync::{Condvar, Mutex};
-use std::time::{Duration, Instant};
 use std::cmp::{max, min};
+use std::sync::{Condvar, Mutex};
 use std::thread;
+use std::time::{Duration, Instant};
 
 pub struct PauseState {
     mutex: Mutex<bool>,

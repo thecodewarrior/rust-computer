@@ -12,5 +12,5 @@ path = "src/lib.rs"
 rust-computer-macros = { path = "./macros" }
 
 # ui stuff
-druid = { git = "https://github.com/xi-editor/druid.git", version = "0.5" }
+druid = { path = "../druid/druid" }
 spin_sleep = "0.3"

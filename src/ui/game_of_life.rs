@@ -1,3 +1,4 @@
+/*
 use std::ops::{Index, IndexMut};
 use std::time::{Duration, Instant};
 
@@ -471,3 +472,4 @@ impl Default for ColorScheme {
         }
     }
 }
+*/

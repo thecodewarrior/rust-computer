@@ -11,7 +11,7 @@ use druid::widget::{
 use druid::{
     AppLauncher, BoxConstraints, Color, Data, Env, Event, EventCtx, LayoutCtx, Lens, LifeCycle,
     LifeCycleCtx, LocalizedString, MouseButton, PaintCtx, Point, Rect, RenderContext, Size,
-    TimerToken, UnitPoint, UpdateCtx, Widget, WindowDesc,
+    TimerToken, UnitPoint, UpdateCtx, Widget, WindowDesc, Key,
 };
 use std::env;
 use std::fs::File;
@@ -25,7 +25,7 @@ const BG: Color = Color::grey8(23_u8);
 #[derive(Clone, Data, Lens)]
 struct AppData {
     sim_state: UiSimState,
-    #[druid(ignore)]
+    #[data(ignore)]
     sim_handle: Rc<SimulatorHandle>, // we don't want to clone the handle
 }
 
@@ -64,8 +64,10 @@ pub fn setup_sim(sim_handle: &SimulatorHandle) {
 
     let mut thread_state = sim_handle.thread_state.write().unwrap();
     thread_state.paused.set_paused(false);
-    thread_state.frequency = 8_000_000.;
+    thread_state.frequency = 1.;
 }
+
+const MONO_FONT: Key<&str> = Key::new("rust-computer.mono_font");
 
 fn make_main_ui() -> impl Widget<AppData> {
     Flex::row()
@@ -82,13 +84,34 @@ fn make_main_ui() -> impl Widget<AppData> {
                     Label::new(|data: &AppData, _env: &_| {
                         format!("PC: 0x{:08x}", data.sim_state.cpu.program_counter)
                     })
+                    .with_font(MONO_FONT)
                     .padding(3.0),
                 )
                 .with_child(
                     Label::new(|data: &AppData, _env: &_| {
-                        format!("{} Hz", data.sim_state.actual_frequency)
+                        format!("{:.2} Hz", data.sim_state.actual_frequency)
                     })
                     .padding(3.0),
+                )
+                .with_child(
+                    Label::new("Registers")
+                        .align_vertical(UnitPoint::LEFT)
+                        .padding(3.0),
+                )
+                .with_flex_child(
+                    Scroll::new(List::new(|| {
+                        Label::new(|item: &(usize, u32), _env: &_| format!("R{:<2} 0x{:08x}", item.0, item.1))
+                            .with_font(MONO_FONT)
+                            .align_vertical(UnitPoint::LEFT)
+                            .padding(3.0)
+                    }))
+                    .vertical()
+                    .lens(
+                        AppData::sim_state
+                            .then(UiSimState::cpu)
+                            .then(UiCpuState::registers),
+                    ),
+                    1.0,
                 )
                 .with_child(
                     Label::new("Vars")
@@ -98,6 +121,7 @@ fn make_main_ui() -> impl Widget<AppData> {
                 .with_flex_child(
                     Scroll::new(List::new(|| {
                         Label::new(|item: &u32, _env: &_| format!("0x{:08x}", item))
+                            .with_font(MONO_FONT)
                             .align_vertical(UnitPoint::LEFT)
                             .padding(3.0)
                     }))
@@ -108,29 +132,13 @@ fn make_main_ui() -> impl Widget<AppData> {
                             .then(UiCpuState::vars),
                     ),
                     1.0,
-                )
-                .with_child(
-                    Label::new("Stack")
-                        .align_vertical(UnitPoint::LEFT)
-                        .padding(3.0),
-                )
-                .with_flex_child(
-                    Scroll::new(List::new(|| {
-                        Label::new(|item: &u32, _env: &_| format!("0x{:08x}", item))
-                            .align_vertical(UnitPoint::LEFT)
-                            .padding(3.0)
-                    }))
-                    .vertical()
-                    .lens(
-                        AppData::sim_state
-                            .then(UiSimState::cpu)
-                            .then(UiCpuState::stack),
-                    ),
-                    1.0,
-                )
+                ),
         )
         .with_flex_spacer(1.)
         .background(BG)
+        .env_scope(|env: &mut druid::Env, data: &AppData| {
+            env.set(MONO_FONT, "monospace");
+        })
 }
 
 struct SimStateReader {
@@ -148,10 +156,7 @@ impl Widget<AppData> for SimStateReader {
             Event::Timer(id) => {
                 if *id == self.timer_id {
                     {
-                        let mut thread_state = data.sim_handle
-                            .thread_state
-                            .write()
-                            .unwrap();
+                        let mut thread_state = data.sim_handle.thread_state.write().unwrap();
                         thread_state.ui_frequency = self.ui_ups;
                         data.sim_state.actual_frequency = thread_state.actual_frequency;
                     }
@@ -161,16 +166,19 @@ impl Widget<AppData> for SimStateReader {
                         data.sim_state.cpu.program_counter =
                             sim_state.computer.cpu.program_counter.address;
                         {
-                            let stack: &mut Vec<u32> = Arc::make_mut(&mut data.sim_state.cpu.stack);
-                            stack.clear();
-                            if let Some(ref frame) = sim_state.computer.cpu.frames.last() {
-                                stack.clone_from(&frame.stack);
+                            let vars: &mut Vec<(usize, u32)> = Arc::make_mut(&mut data.sim_state.cpu.registers);
+                            vars.clear();
+                            if let Some(frame) = sim_state.computer.cpu.frames.last() {
+                                let registers = &frame.registers;
+                                for i in 0 .. registers.len() {
+                                    vars.push((i, registers[i]));
+                                }
                             }
                         }
                         {
                             let vars: &mut Vec<u32> = Arc::make_mut(&mut data.sim_state.cpu.vars);
                             vars.clear();
-                            if let Some(ref frame) = sim_state.computer.cpu.frames.last() {
+                            if let Some(frame) = sim_state.computer.cpu.frames.last() {
                                 vars.clone_from(&frame.vars);
                             }
                         }

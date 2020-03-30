@@ -56,7 +56,7 @@ fn run_simulation(
         .report_interval_s(0.25)
         .native_accuracy_ns(5_000_000)
         .build_without_target_rate(); // we'll set the target rate during the loop
-    // split up batches so the UI thread has plenty of opportunities to interrupt as they drift out of sync.
+                                      // split up batches so the UI thread has plenty of opportunities to interrupt as they drift out of sync.
     let frame_split = 2.;
     loop {
         loop_helper.loop_start();
@@ -78,13 +78,19 @@ fn run_simulation(
             ui_frequency = thread_state.ui_frequency * frame_split;
         }
 
-        let updates_per_frame = (target_frequency / ui_frequency + 0.5) as u32;
-        // calculate loop duration based on the update count, since that's the important thing to keep constant
-        loop_helper.set_target_rate(target_frequency / updates_per_frame as f64);
+        let updates_per_frame: u32;
+        if target_frequency < ui_frequency {
+            updates_per_frame = 1;
+            loop_helper.set_target_rate(target_frequency as f64);
+        } else {
+            updates_per_frame = (target_frequency / ui_frequency + 0.5) as u32;
+            // calculate loop duration based on the update count, since that's the important thing to keep constant
+            loop_helper.set_target_rate(target_frequency / updates_per_frame as f64);
+        }
 
         {
             let mut sim_state = sim_state_lock.write().unwrap();
-            for _ in 0 .. updates_per_frame {
+            for _ in 0..updates_per_frame {
                 sim_state.computer.tick();
             }
         }

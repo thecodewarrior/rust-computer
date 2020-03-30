@@ -2,16 +2,18 @@
 #![feature(proc_macro_diagnostic)]
 
 extern crate proc_macro;
-#[macro_use] extern crate quote;
-#[macro_use] extern crate syn;
+#[macro_use]
+extern crate quote;
+#[macro_use]
+extern crate syn;
 
 use proc_macro::TokenStream;
-use syn::{Expr, LitStr, LitInt};
 use syn::parse::{Parse, ParseStream, Result};
+use syn::{Expr, LitInt, LitStr};
 
 struct TestInput {
     expression: Expr,
-    pattern: LitStr
+    pattern: LitStr,
 }
 
 impl Parse for TestInput {
@@ -21,20 +23,28 @@ impl Parse for TestInput {
         let pattern: LitStr = input.parse()?;
         Ok(TestInput {
             expression,
-            pattern
+            pattern,
         })
     }
 }
 
 #[proc_macro]
 pub fn bits(input: TokenStream) -> TokenStream {
-    let TestInput { expression, pattern } = parse_macro_input!(input as TestInput);
+    let TestInput {
+        expression,
+        pattern,
+    } = parse_macro_input!(input as TestInput);
 
     let pattern_string: String = pattern.value();
-    if !pattern_string.chars().all(|c| c == '0' || c == '1' || c == '_' || c == 'x') {
-        pattern.span().unwrap()
-        .error("Pattern strings can only contain the characters 0, 1, _, and x.")
-        .emit();
+    if !pattern_string
+        .chars()
+        .all(|c| c == '0' || c == '1' || c == '_' || c == 'x')
+    {
+        pattern
+            .span()
+            .unwrap()
+            .error("Pattern strings can only contain the characters 0, 1, _, and x.")
+            .emit();
         return TokenStream::new();
     }
 
