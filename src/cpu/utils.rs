@@ -17,9 +17,9 @@ impl ProgramCounter {
     }
 
     /// Increments the address by n and returns the original value
-    pub fn advance_n(&mut self, amount: u32) -> u32 {
+    pub fn advance_n(&mut self, amount: usize) -> u32 {
         let original = self.address;
-        self.address += amount;
+        self.address += amount as u32;
         return original;
     }
 }

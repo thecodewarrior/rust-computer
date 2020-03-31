@@ -19,29 +19,27 @@ impl Cpu {
     pub fn tick(&mut self, memory: &mut Memory) -> CpuResult<()> {
         match memory.read_byte(self.program_counter.advance())? {
             0b0000_0000 => {}
-            op if bits!(op; "0000_01xx") => { // move
-                let width = DataWidth::decode(op);
+            op if bits!(op; "0000_0001") => { // move
                 let source = Location::decode(memory, &mut self.program_counter)?;
                 let dest = Location::decode(memory, &mut self.program_counter)?;
-                let value = self.get_value(source, width)?;
-                self.set_value(dest, width, value)?;
+                let value = self.get_value(memory, source)?;
+                self.set_value(memory, dest, value)?;
             }
-            op if bits!(op; "0001_xxxx") => { // unsigned math
-                let width = DataWidth::decode(op);
+            op if bits!(op; "0000_1xxx") => { // unsigned math
                 let a = Location::decode(memory, &mut self.program_counter)?;
                 let b = Location::decode(memory, &mut self.program_counter)?;
                 let dest = Location::decode(memory, &mut self.program_counter)?;
-                let value_a = Wrapping(self.get_value(a, width)?);
-                let value_b = Wrapping(self.get_value(b, width)?);
+                let value_a = Wrapping(self.get_value(memory, a)?);
+                let value_b = Wrapping(self.get_value(memory, b)?);
 
-                let result = match op >> 2 & 0b11 {
-                    0b00 => value_a + value_b,
-                    0b01 => value_a - value_b,
-                    0b10 => value_a * value_b,
-                    0b11 => value_a / value_b,
+                let result = match op & 0b111 {
+                    0b000 => value_a + value_b,
+                    0b001 => value_a - value_b,
+                    0b010 => value_a * value_b,
+                    0b011 => value_a / value_b,
                     _ => unreachable!()
                 };
-                self.set_value(dest, width, result.0)?;
+                self.set_value(memory, dest, result.0)?;
             }
             _ => return Err(CpuPanic::new())
         }
@@ -49,29 +47,60 @@ impl Cpu {
         Ok(())
     }
 
-    fn get_value(&self, location: Location, width: DataWidth) -> CpuResult<u32> {
+    fn get_value(&self, memory: &Memory, location: Location) -> CpuResult<u32> {
         match location {
             Location::Immediate(value) => Ok(value),
-            Location::Register(index) => if index < 16 { 
+            Location::Direct(direct) => self.get_direct(direct),
+            Location::Indirect(direct, width) => {
+                let address = self.get_direct(direct)?;
+                memory.read_width(width, address)
+            },
+        }
+    }
+
+    fn get_direct(&self, location: DirectAddress) -> CpuResult<u32> {
+        match location {
+            DirectAddress::Register(index) => if index < 16 { 
                 Ok(self.frame()?.registers[index])
             } else {
                 Err(CpuPanic::new())
             },
-        }.map(|v| v & width.bitmask())
-    }
-
-    fn set_value(&mut self, location: Location, width: DataWidth, value: u32) -> CpuResult<()> {
-        let value = value & width.bitmask();
-        match location {
-            Location::Immediate(_) => Err(CpuPanic::new()),
-            Location::Register(index) => if index < 16 {
-                self.frame_mut()?.registers[index] = value;
-                Ok(()) 
-            } else { 
+            DirectAddress::Frame(index) => if index < self.frame()?.vars.len() { 
+                Ok(self.frame()?.vars[index])
+            } else {
                 Err(CpuPanic::new())
             },
         }
     }
+
+    fn set_value(&mut self, memory: &mut Memory, location: Location, value: u32) -> CpuResult<()> {
+        match location {
+            Location::Immediate(_) => Err(CpuPanic::new()),
+            Location::Direct(direct) => self.set_direct(direct, value),
+            Location::Indirect(direct, width) => {
+                let address = self.get_direct(direct)?;
+                memory.write_width(width, address, value)
+            },
+        }
+    }
+
+    fn set_direct(&mut self, location: DirectAddress, value: u32) -> CpuResult<()> {
+        match location {
+            DirectAddress::Register(index) => if index < 16 { 
+                self.frame_mut()?.registers[index] = value;
+                Ok(())
+            } else {
+                Err(CpuPanic::new())
+            },
+            DirectAddress::Frame(index) => if index < self.frame()?.vars.len() { 
+                self.frame_mut()?.vars[index] = value;
+                Ok(())
+            } else {
+                Err(CpuPanic::new())
+            },
+        }
+    }
+
 
     pub fn frame(&self) -> Result<&StackFrame, CpuPanic> {
         self.frames.last().ok_or_else(|| CpuPanic::new())
@@ -82,14 +111,59 @@ impl Cpu {
     }
 }
 
-#[derive(Clone, Copy)]
-enum DataWidth {
-    Byte, Short, Word
+enum Location {
+    Immediate(u32),
+    Direct(DirectAddress),
+    Indirect(DirectAddress, DataWidth),
+}
+
+enum DirectAddress {
+    Register(usize),
+    Frame(usize),
+}
+
+impl Location {
+    pub fn decode(memory: &Memory, pc: &mut ProgramCounter) -> CpuResult<Location> {
+        // opcodes starting with a 1 use the last nibble as a parameter
+        return Ok(match memory.read_byte(pc.advance())? {
+            it if bits!(it; "0xxx_xxxx") => Location::Immediate(it as u32 & 0b0111_1111),
+            it if bits!(it; "1100_xxxx") => Location::Direct(DirectAddress::Register(it as usize & 0b0000_1111)),
+
+            it if bits!(it; "1000_00xx") => {
+                let width = DataWidth::decode(it);
+                Location::Immediate(memory.read_width(width, pc.advance_n(width.size()))?)
+            },
+            it if bits!(it; "1000_01xx") => {
+                let width = DataWidth::decode(it);
+                Location::Direct(DirectAddress::Frame(
+                    memory.read_width(width, pc.advance_n(width.size()))? as usize
+                ))
+            },
+
+            it if bits!(it; "1000_1xxx") => {
+                let width = DataWidth::decode(it);
+                Location::Indirect(read_direct(memory, pc,it)?, width)
+            },
+            _ => return Err(CpuPanic::new())
+        });
+
+        fn read_direct(memory: &Memory, pc: &mut ProgramCounter, location: u8) -> CpuResult<DirectAddress> {
+            if location & 0b0000_0100 == 0 {
+                Ok(DirectAddress::Register(
+                    memory.read_byte(pc.advance())? as usize
+                ))
+            } else {
+                Ok(DirectAddress::Frame(
+                    memory.read_word(pc.advance_n(4))? as usize
+                ))
+            }
+        }
+    }
 }
 
 impl DataWidth {
     /// Gets the data width based on the last two bits in the passed byte
-    fn decode(opcode: u8) -> DataWidth {
+    pub fn decode(opcode: u8) -> DataWidth {
         match opcode & 0b0000_0011 {
             0b00 => DataWidth::Byte,
             0b01 => DataWidth::Short,
@@ -97,32 +171,6 @@ impl DataWidth {
             0b11 => DataWidth::Word,
             _ => unreachable!()
         }
-    }
-
-    fn bitmask(&self) -> u32 {
-        match self {
-            DataWidth::Byte => 0xff,
-            DataWidth::Short => 0xffff,
-            DataWidth::Word => 0xffff_ffff,
-        } 
-    }
-}
-
-enum Location {
-    Immediate(u32),
-    Register(usize)
-}
-
-impl Location {
-    pub fn decode(memory: &Memory, pc: &mut ProgramCounter) -> CpuResult<Location> {
-        // opcodes starting with a 1 use the last nibble as a parameter
-        Ok(match memory.read_byte(pc.advance())? {
-            it if bits!(it; "0xxx_xxxx") => Location::Immediate(it as u32 & 0b0111_1111),
-            it if bits!(it; "110x_xxxx") => Location::Register(it as usize & 0b0001_1111),
-
-            it if bits!(it; "1000_0000") => Location::Immediate(memory.read_word(pc.advance_n(4))?),
-            _ => return Err(CpuPanic::new())
-        })
     }
 }
 
