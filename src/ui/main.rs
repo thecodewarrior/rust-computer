@@ -1,21 +1,18 @@
-use std::ops::{Index, IndexMut};
 use std::time::{Duration, Instant};
 
 use super::state::*;
-use super::worker::{SimulatorHandle, SimulatorState};
+use super::{worker::{SimulatorHandle}};
 use druid::lens::{self, LensExt};
 use druid::widget::{
-    Button, CrossAxisAlignment, Flex, FlexParams, Label, List, MainAxisAlignment, Scroll, Slider,
-    WidgetExt,
+    CrossAxisAlignment, Flex, Label, List, MainAxisAlignment, Scroll,
+    WidgetExt, Controller, Container,
 };
 use druid::{
-    AppLauncher, BoxConstraints, Color, Data, Env, Event, EventCtx, LayoutCtx, Lens, LifeCycle,
-    LifeCycleCtx, LocalizedString, MouseButton, PaintCtx, Point, Rect, RenderContext, Size,
-    TimerToken, UnitPoint, UpdateCtx, Widget, WindowDesc, Key,
+    AppLauncher, Color, Data, Env, Event, EventCtx, Lens, LocalizedString, RenderContext, Size,
+    TimerToken, UnitPoint, Widget, WindowDesc, Key, KeyCode,
 };
 use std::env;
 use std::fs::File;
-use std::io;
 use std::io::prelude::*;
 use std::rc::Rc;
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -70,11 +67,11 @@ pub fn setup_sim(sim_handle: &SimulatorHandle) {
 const MONO_FONT: Key<&str> = Key::new("rust-computer.mono_font");
 
 fn make_main_ui() -> impl Widget<AppData> {
+    let controller = SimStateReader {
+        timer_id: TimerToken::INVALID,
+        ui_ups: 10.,
+    };
     Flex::row()
-        .with_child(SimStateReader {
-            timer_id: TimerToken::INVALID,
-            ui_ups: 10.,
-        })
         .with_child(
             Flex::column()
                 .main_axis_alignment(MainAxisAlignment::Start)
@@ -136,6 +133,7 @@ fn make_main_ui() -> impl Widget<AppData> {
         )
         .with_flex_spacer(1.)
         .background(BG)
+        .controller(controller)
         .env_scope(|env: &mut druid::Env, data: &AppData| {
             env.set(MONO_FONT, "monospace");
         })
@@ -146,12 +144,13 @@ struct SimStateReader {
     ui_ups: f64,
 }
 
-impl Widget<AppData> for SimStateReader {
-    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut AppData, _env: &Env) {
+impl Controller<AppData, Container<AppData>> for SimStateReader {
+    fn event(&mut self, child: &mut Container<AppData>, ctx: &mut EventCtx, event: &Event, data: &mut AppData, env: &Env) {
         match event {
             Event::WindowConnected => {
                 let deadline = Instant::now() + Duration::from_secs_f64(1. / self.ui_ups);
                 self.timer_id = ctx.request_timer(deadline);
+                ctx.request_focus();
             }
             Event::Timer(id) => {
                 if *id == self.timer_id {
@@ -186,25 +185,32 @@ impl Widget<AppData> for SimStateReader {
                     let deadline = Instant::now() + Duration::from_secs_f64(1. / self.ui_ups);
                     self.timer_id = ctx.request_timer(deadline);
                 }
-            }
+            },
+            Event::KeyDown(e) => {
+                if e.key_code == KeyCode::Space && !e.is_repeat {
+                    let did_pause: bool;
+                    {
+                        let thread_state = data.sim_handle.thread_state.read().unwrap(); 
+                        did_pause = !thread_state.paused.is_paused();
+                        thread_state.paused.set_paused(did_pause);
+                    }
+                    if did_pause {
+                        let sim_state = data.sim_handle.sim_state.read().unwrap(); 
+                        let mut f = File::create("debug/memory.bin").unwrap();
+                        f.write_all(&sim_state.computer.memory.data[..]);
+                    }
+                }
+                if e.key_code == KeyCode::Period {
+                    if data.sim_handle.thread_state.read().unwrap().paused.is_paused() {
+                        let mut sim_state = data.sim_handle.sim_state.write().unwrap(); 
+                        sim_state.computer.tick(); 
+                        let mut f = File::create("debug/memory.bin").unwrap();
+                        f.write_all(&sim_state.computer.memory.data[..]);
+                    }
+                }
+            },
             _ => (),
         }
-    }
-
-    fn lifecycle(&mut self, _ctx: &mut LifeCycleCtx, _event: &LifeCycle, _data: &AppData, _: &Env) {
-    }
-
-    fn update(&mut self, ctx: &mut UpdateCtx, old_data: &AppData, data: &AppData, _: &Env) {
-        if !old_data.same(data) {
-            // send settings/etc. that other widgets change to the sim thread?
-        }
-    }
-
-    fn layout(&mut self, _: &mut LayoutCtx, bc: &BoxConstraints, _: &AppData, _: &Env) -> Size {
-        bc.min()
-    }
-
-    fn paint(&mut self, ctx: &mut PaintCtx, data: &AppData, _env: &Env) {
-        // nop
+        child.event(ctx, event, data, env)
     }
 }

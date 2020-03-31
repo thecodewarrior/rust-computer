@@ -30,4 +30,8 @@ impl PauseState {
         *state = new_state;
         self.condvar.notify_all();
     }
+
+    pub fn is_paused(&self) -> bool {
+        *self.mutex.lock().unwrap()
+    }
 }
