@@ -19,13 +19,15 @@ impl Cpu {
     pub fn tick(&mut self, memory: &mut Memory) -> CpuResult<()> {
         match memory.read_byte(self.program_counter.advance())? {
             0b0000_0000 => {}
-            op if bits!(op; "0000_0001") => { // move
+            op if bits!(op; "0000_0001") => {
+                // move
                 let source = Location::decode(memory, &mut self.program_counter)?;
                 let dest = Location::decode(memory, &mut self.program_counter)?;
                 let value = self.get_value(memory, source)?;
                 self.set_value(memory, dest, value)?;
             }
-            op if bits!(op; "0000_1xxx") => { // unsigned arithmetic
+            op if bits!(op; "0000_1xxx") => {
+                // unsigned arithmetic
                 let a = Location::decode(memory, &mut self.program_counter)?;
                 let b = Location::decode(memory, &mut self.program_counter)?;
                 let dest = Location::decode(memory, &mut self.program_counter)?;
@@ -38,14 +40,17 @@ impl Cpu {
                     0b010 => value_a * value_b,
                     0b011 => value_a / value_b,
                     0b100 => value_a % value_b,
-                    _ => return Err(CpuPanic::new())
+                    _ => return Err(CpuPanic::new()),
                 };
                 self.set_value(memory, dest, result.0)?;
             }
-            op if bits!(op; "0001_0000") => { // unconditional jump
-                self.program_counter.address = memory.read_word(self.program_counter.advance_n(4))?;
+            op if bits!(op; "0001_0000") => {
+                // unconditional jump
+                self.program_counter.address =
+                    memory.read_word(self.program_counter.advance_n(4))?;
             }
-            op if bits!(op; "0001_0xxx") => { // conditional jump
+            op if bits!(op; "0001_0xxx") => {
+                // conditional jump
                 let a = Location::decode(memory, &mut self.program_counter)?;
                 let b = Location::decode(memory, &mut self.program_counter)?;
                 let dest = memory.read_word(self.program_counter.advance_n(4))?;
@@ -59,13 +64,13 @@ impl Cpu {
                     0b100 => value_a <= value_b,
                     0b101 => value_a >= value_b,
                     0b110 => value_a > value_b,
-                    _ => return Err(CpuPanic::new())
+                    _ => return Err(CpuPanic::new()),
                 };
                 if result {
                     self.program_counter.address = dest;
                 }
             }
-            _ => return Err(CpuPanic::new())
+            _ => return Err(CpuPanic::new()),
         }
 
         Ok(())
@@ -78,32 +83,36 @@ impl Cpu {
             Location::Indirect(direct, width) => {
                 let address = self.get_direct(direct)?;
                 memory.read_width(width, address)
-            },
+            }
             Location::IndirectPostIncrement(direct, width) => {
                 let address = self.get_direct(direct)?;
                 self.set_direct(direct, address + width.size() as u32)?;
                 memory.read_width(width, address)
-            },
+            }
             Location::IndirectPreDecrement(direct, width) => {
                 let address = self.get_direct(direct)? - width.size() as u32;
                 self.set_direct(direct, address)?;
                 memory.read_width(width, address)
-            },
+            }
         }
     }
 
     fn get_direct(&self, location: DirectAddress) -> CpuResult<u32> {
         match location {
-            DirectAddress::Register(index) => if index < 16 { 
-                Ok(self.frame()?.registers[index])
-            } else {
-                Err(CpuPanic::new())
-            },
-            DirectAddress::Frame(index) => if index < self.frame()?.vars.len() { 
-                Ok(self.frame()?.vars[index])
-            } else {
-                Err(CpuPanic::new())
-            },
+            DirectAddress::Register(index) => {
+                if index < 16 {
+                    Ok(self.frame()?.registers[index])
+                } else {
+                    Err(CpuPanic::new())
+                }
+            }
+            DirectAddress::Frame(index) => {
+                if index < self.frame()?.vars.len() {
+                    Ok(self.frame()?.vars[index])
+                } else {
+                    Err(CpuPanic::new())
+                }
+            }
         }
     }
 
@@ -114,37 +123,40 @@ impl Cpu {
             Location::Indirect(direct, width) => {
                 let address = self.get_direct(direct)?;
                 memory.write_width(width, address, value)
-            },
+            }
             Location::IndirectPostIncrement(direct, width) => {
                 let address = self.get_direct(direct)?;
                 self.set_direct(direct, address + width.size() as u32)?;
                 memory.write_width(width, address, value)
-            },
+            }
             Location::IndirectPreDecrement(direct, width) => {
                 let address = self.get_direct(direct)? - width.size() as u32;
                 self.set_direct(direct, address)?;
                 memory.write_width(width, address, value)
-            },
+            }
         }
     }
 
     fn set_direct(&mut self, location: DirectAddress, value: u32) -> CpuResult<()> {
         match location {
-            DirectAddress::Register(index) => if index < 16 { 
-                self.frame_mut()?.registers[index] = value;
-                Ok(())
-            } else {
-                Err(CpuPanic::new())
-            },
-            DirectAddress::Frame(index) => if index < self.frame()?.vars.len() { 
-                self.frame_mut()?.vars[index] = value;
-                Ok(())
-            } else {
-                Err(CpuPanic::new())
-            },
+            DirectAddress::Register(index) => {
+                if index < 16 {
+                    self.frame_mut()?.registers[index] = value;
+                    Ok(())
+                } else {
+                    Err(CpuPanic::new())
+                }
+            }
+            DirectAddress::Frame(index) => {
+                if index < self.frame()?.vars.len() {
+                    self.frame_mut()?.vars[index] = value;
+                    Ok(())
+                } else {
+                    Err(CpuPanic::new())
+                }
+            }
         }
     }
-
 
     pub fn frame(&self) -> Result<&StackFrame, CpuPanic> {
         self.frames.last().ok_or_else(|| CpuPanic::new())
@@ -174,35 +186,41 @@ impl Location {
         // opcodes starting with a 1 use the last nibble as a parameter
         return Ok(match memory.read_byte(pc.advance())? {
             it if bits!(it; "0xxx_xxxx") => Location::Immediate(it as u32 & 0b0111_1111),
-            it if bits!(it; "1100_xxxx") => Location::Direct(DirectAddress::Register(it as usize & 0b0000_1111)),
+            it if bits!(it; "1100_xxxx") => {
+                Location::Direct(DirectAddress::Register(it as usize & 0b0000_1111))
+            }
 
             it if bits!(it; "1000_00xx") => {
                 let width = DataWidth::decode(it);
                 Location::Immediate(memory.read_width(width, pc.advance_n(width.size()))?)
-            },
+            }
             it if bits!(it; "1000_01xx") => {
                 let width = DataWidth::decode(it);
                 Location::Direct(DirectAddress::Frame(
-                    memory.read_width(width, pc.advance_n(width.size()))? as usize
+                    memory.read_width(width, pc.advance_n(width.size()))? as usize,
                 ))
-            },
+            }
 
             it if bits!(it; "1000_1xxx") => {
                 let width = DataWidth::decode(it);
-                Location::Indirect(read_direct(memory, pc,it)?, width)
-            },
+                Location::Indirect(read_direct(memory, pc, it)?, width)
+            }
             it if bits!(it; "1001_0xxx") => {
                 let width = DataWidth::decode(it);
-                Location::IndirectPostIncrement(read_direct(memory, pc,it)?, width)
-            },
+                Location::IndirectPostIncrement(read_direct(memory, pc, it)?, width)
+            }
             it if bits!(it; "1001_1xxx") => {
                 let width = DataWidth::decode(it);
-                Location::IndirectPreDecrement(read_direct(memory, pc,it)?, width)
-            },
-            _ => return Err(CpuPanic::new())
+                Location::IndirectPreDecrement(read_direct(memory, pc, it)?, width)
+            }
+            _ => return Err(CpuPanic::new()),
         });
 
-        fn read_direct(memory: &Memory, pc: &mut ProgramCounter, location: u8) -> CpuResult<DirectAddress> {
+        fn read_direct(
+            memory: &Memory,
+            pc: &mut ProgramCounter,
+            location: u8,
+        ) -> CpuResult<DirectAddress> {
             if location & 0b0000_0100 == 0 {
                 Ok(DirectAddress::Register(
                     memory.read_byte(pc.advance())? as usize
@@ -224,7 +242,7 @@ impl DataWidth {
             0b01 => DataWidth::Short,
             0b10 => DataWidth::Word,
             0b11 => DataWidth::Word,
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 }

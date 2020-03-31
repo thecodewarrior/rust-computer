@@ -26,7 +26,7 @@ impl Memory {
             return Err(CpuPanic::new());
         }
         Ok(u16::from_be_bytes(
-            self.data[address..address+2].try_into().unwrap()
+            self.data[address..address + 2].try_into().unwrap(),
         ))
     }
 
@@ -90,7 +90,9 @@ impl Memory {
 
 #[derive(Clone, Copy)]
 pub enum DataWidth {
-    Byte, Short, Word
+    Byte,
+    Short,
+    Word,
 }
 
 impl DataWidth {
@@ -99,7 +101,7 @@ impl DataWidth {
             DataWidth::Byte => 0xff,
             DataWidth::Short => 0xffff,
             DataWidth::Word => 0xffff_ffff,
-        } 
+        }
     }
 
     pub fn size(&self) -> usize {
@@ -107,6 +109,6 @@ impl DataWidth {
             DataWidth::Byte => 1,
             DataWidth::Short => 2,
             DataWidth::Word => 4,
-        } 
+        }
     }
 }

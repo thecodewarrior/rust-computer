@@ -1,15 +1,15 @@
 use std::time::{Duration, Instant};
 
 use super::state::*;
-use super::{worker::{SimulatorHandle}};
+use super::worker::SimulatorHandle;
 use druid::lens::{self, LensExt};
 use druid::widget::{
-    CrossAxisAlignment, Flex, Label, List, MainAxisAlignment, Scroll,
-    WidgetExt, Controller, Container,
+    Container, Controller, CrossAxisAlignment, Flex, Label, List, MainAxisAlignment, Scroll,
+    WidgetExt,
 };
 use druid::{
-    AppLauncher, Color, Data, Env, Event, EventCtx, Lens, LocalizedString, RenderContext, Size,
-    TimerToken, UnitPoint, Widget, WindowDesc, Key, KeyCode,
+    AppLauncher, Color, Data, Env, Event, EventCtx, Key, KeyCode, Lens, LocalizedString,
+    RenderContext, Size, TimerToken, UnitPoint, Widget, WindowDesc,
 };
 use std::env;
 use std::fs::File;
@@ -61,7 +61,7 @@ pub fn setup_sim(sim_handle: &SimulatorHandle) {
 
     let mut thread_state = sim_handle.thread_state.write().unwrap();
     thread_state.paused.set_paused(false);
-    thread_state.frequency = 20.;
+    thread_state.frequency = 20_000.;
 }
 
 const MONO_FONT: Key<&str> = Key::new("rust-computer.mono_font");
@@ -97,10 +97,12 @@ fn make_main_ui() -> impl Widget<AppData> {
                 )
                 .with_flex_child(
                     Scroll::new(List::new(|| {
-                        Label::new(|item: &(usize, u32), _env: &_| format!("R{:<2} 0x{:08x}", item.0, item.1))
-                            .with_font(MONO_FONT)
-                            .align_vertical(UnitPoint::LEFT)
-                            .padding(3.0)
+                        Label::new(|item: &(usize, u32), _env: &_| {
+                            format!("R{:<2} 0x{:08x}", item.0, item.1)
+                        })
+                        .with_font(MONO_FONT)
+                        .align_vertical(UnitPoint::LEFT)
+                        .padding(3.0)
                     }))
                     .vertical()
                     .lens(
@@ -145,7 +147,14 @@ struct SimStateReader {
 }
 
 impl Controller<AppData, Container<AppData>> for SimStateReader {
-    fn event(&mut self, child: &mut Container<AppData>, ctx: &mut EventCtx, event: &Event, data: &mut AppData, env: &Env) {
+    fn event(
+        &mut self,
+        child: &mut Container<AppData>,
+        ctx: &mut EventCtx,
+        event: &Event,
+        data: &mut AppData,
+        env: &Env,
+    ) {
         match event {
             Event::WindowConnected => {
                 let deadline = Instant::now() + Duration::from_secs_f64(1. / self.ui_ups);
@@ -165,11 +174,12 @@ impl Controller<AppData, Container<AppData>> for SimStateReader {
                         data.sim_state.cpu.program_counter =
                             sim_state.computer.cpu.program_counter.address;
                         {
-                            let vars: &mut Vec<(usize, u32)> = Arc::make_mut(&mut data.sim_state.cpu.registers);
+                            let vars: &mut Vec<(usize, u32)> =
+                                Arc::make_mut(&mut data.sim_state.cpu.registers);
                             vars.clear();
                             if let Some(frame) = sim_state.computer.cpu.frames.last() {
                                 let registers = &frame.registers;
-                                for i in 0 .. registers.len() {
+                                for i in 0..registers.len() {
                                     vars.push((i, registers[i]));
                                 }
                             }
@@ -185,30 +195,37 @@ impl Controller<AppData, Container<AppData>> for SimStateReader {
                     let deadline = Instant::now() + Duration::from_secs_f64(1. / self.ui_ups);
                     self.timer_id = ctx.request_timer(deadline);
                 }
-            },
+            }
             Event::KeyDown(e) => {
                 if e.key_code == KeyCode::Space && !e.is_repeat {
                     let did_pause: bool;
                     {
-                        let thread_state = data.sim_handle.thread_state.read().unwrap(); 
+                        let thread_state = data.sim_handle.thread_state.read().unwrap();
                         did_pause = !thread_state.paused.is_paused();
                         thread_state.paused.set_paused(did_pause);
                     }
                     if did_pause {
-                        let sim_state = data.sim_handle.sim_state.read().unwrap(); 
+                        let sim_state = data.sim_handle.sim_state.read().unwrap();
                         let mut f = File::create("debug/memory.bin").unwrap();
                         f.write_all(&sim_state.computer.memory.data[..]);
                     }
                 }
                 if e.key_code == KeyCode::Period {
-                    if data.sim_handle.thread_state.read().unwrap().paused.is_paused() {
-                        let mut sim_state = data.sim_handle.sim_state.write().unwrap(); 
-                        sim_state.computer.tick(); 
+                    if data
+                        .sim_handle
+                        .thread_state
+                        .read()
+                        .unwrap()
+                        .paused
+                        .is_paused()
+                    {
+                        let mut sim_state = data.sim_handle.sim_state.write().unwrap();
+                        sim_state.computer.tick();
                         let mut f = File::create("debug/memory.bin").unwrap();
                         f.write_all(&sim_state.computer.memory.data[..]);
                     }
                 }
-            },
+            }
             _ => (),
         }
         child.event(ctx, event, data, env)
