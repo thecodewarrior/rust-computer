@@ -1,6 +1,7 @@
 use super::*;
 use crate::cpu::CpuResult;
 use rust_computer_macros::bits;
+use std::num::Wrapping;
 
 pub struct Cpu {
     pub frames: Vec<StackFrame>,
@@ -18,12 +19,29 @@ impl Cpu {
     pub fn tick(&mut self, memory: &mut Memory) -> CpuResult<()> {
         match memory.read_byte(self.program_counter.advance())? {
             0b0000_0000 => {}
-            op if bits!(op; "0000_01xx") => {
+            op if bits!(op; "0000_01xx") => { // move
                 let width = DataWidth::decode(op);
                 let source = Location::decode(memory, &mut self.program_counter)?;
                 let dest = Location::decode(memory, &mut self.program_counter)?;
                 let value = self.get_value(source, width)?;
                 self.set_value(dest, width, value)?;
+            }
+            op if bits!(op; "0001_xxxx") => { // unsigned math
+                let width = DataWidth::decode(op);
+                let a = Location::decode(memory, &mut self.program_counter)?;
+                let b = Location::decode(memory, &mut self.program_counter)?;
+                let dest = Location::decode(memory, &mut self.program_counter)?;
+                let value_a = Wrapping(self.get_value(a, width)?);
+                let value_b = Wrapping(self.get_value(b, width)?);
+
+                let result = match op >> 2 & 0b11 {
+                    0b00 => value_a + value_b,
+                    0b01 => value_a - value_b,
+                    0b10 => value_a * value_b,
+                    0b11 => value_a / value_b,
+                    _ => unreachable!()
+                };
+                self.set_value(dest, width, result.0)?;
             }
             _ => return Err(CpuPanic::new())
         }
