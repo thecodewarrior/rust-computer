@@ -20,6 +20,16 @@ impl Memory {
         Ok(self.data[address])
     }
 
+    pub fn read_short(&self, address: u32) -> CpuResult<u16> {
+        let address = address as usize;
+        if address >= self.data.len() - 2 {
+            return Err(CpuPanic::new());
+        }
+        Ok(u16::from_be_bytes(
+            self.data[address..address+2].try_into().unwrap()
+        ))
+    }
+
     pub fn read_word(&self, address: u32) -> CpuResult<u32> {
         let address = address as usize;
         if address >= self.data.len() - 4 {

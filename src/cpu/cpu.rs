@@ -18,11 +18,12 @@ impl Cpu {
     pub fn tick(&mut self, memory: &mut Memory) -> CpuResult<()> {
         match memory.read_byte(self.program_counter.advance())? {
             0b0000_0000 => {}
-            0b0000_0001 => {
+            op if bits!(op; "0000_01xx") => {
+                let width = DataWidth::decode(op);
                 let source = Location::decode(memory, &mut self.program_counter)?;
                 let dest = Location::decode(memory, &mut self.program_counter)?;
-                let value = self.get_value(source)?;
-                self.set_value(dest, value)?;
+                let value = self.get_value(source, width)?;
+                self.set_value(dest, width, value)?;
             }
             _ => return Err(CpuPanic::new())
         }
@@ -30,7 +31,7 @@ impl Cpu {
         Ok(())
     }
 
-    fn get_value(&self, location: Location) -> CpuResult<u32> {
+    fn get_value(&self, location: Location, width: DataWidth) -> CpuResult<u32> {
         match location {
             Location::Immediate(value) => Ok(value),
             Location::Register(index) => if index < 16 { 
@@ -38,10 +39,11 @@ impl Cpu {
             } else {
                 Err(CpuPanic::new())
             },
-        }
+        }.map(|v| v & width.bitmask())
     }
 
-    fn set_value(&mut self, location: Location, value: u32) -> CpuResult<()> {
+    fn set_value(&mut self, location: Location, width: DataWidth, value: u32) -> CpuResult<()> {
+        let value = value & width.bitmask();
         match location {
             Location::Immediate(_) => Err(CpuPanic::new()),
             Location::Register(index) => if index < 16 {
@@ -62,6 +64,32 @@ impl Cpu {
     }
 }
 
+#[derive(Clone, Copy)]
+enum DataWidth {
+    Byte, Short, Word
+}
+
+impl DataWidth {
+    /// Gets the data width based on the last two bits in the passed byte
+    fn decode(opcode: u8) -> DataWidth {
+        match opcode & 0b0000_0011 {
+            0b00 => DataWidth::Byte,
+            0b01 => DataWidth::Short,
+            0b10 => DataWidth::Word,
+            0b11 => DataWidth::Word,
+            _ => unreachable!()
+        }
+    }
+
+    fn bitmask(&self) -> u32 {
+        match self {
+            DataWidth::Byte => 0xff,
+            DataWidth::Short => 0xffff,
+            DataWidth::Word => 0xffff_ffff,
+        } 
+    }
+}
+
 enum Location {
     Immediate(u32),
     Register(usize)
@@ -73,6 +101,8 @@ impl Location {
         Ok(match memory.read_byte(pc.advance())? {
             it if bits!(it; "0xxx_xxxx") => Location::Immediate(it as u32 & 0b0111_1111),
             it if bits!(it; "110x_xxxx") => Location::Register(it as usize & 0b0001_1111),
+
+            it if bits!(it; "1000_0000") => Location::Immediate(memory.read_word(pc.advance_n(4))?),
             _ => return Err(CpuPanic::new())
         })
     }
