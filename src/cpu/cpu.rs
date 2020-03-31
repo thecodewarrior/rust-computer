@@ -25,7 +25,7 @@ impl Cpu {
                 let value = self.get_value(memory, source)?;
                 self.set_value(memory, dest, value)?;
             }
-            op if bits!(op; "0000_1xxx") => { // unsigned math
+            op if bits!(op; "0000_1xxx") => { // unsigned arithmetic
                 let a = Location::decode(memory, &mut self.program_counter)?;
                 let b = Location::decode(memory, &mut self.program_counter)?;
                 let dest = Location::decode(memory, &mut self.program_counter)?;
@@ -37,9 +37,33 @@ impl Cpu {
                     0b001 => value_a - value_b,
                     0b010 => value_a * value_b,
                     0b011 => value_a / value_b,
-                    _ => unreachable!()
+                    0b100 => value_a % value_b,
+                    _ => return Err(CpuPanic::new())
                 };
                 self.set_value(memory, dest, result.0)?;
+            }
+            op if bits!(op; "0001_0000") => { // unconditional jump
+                self.program_counter.address = memory.read_word(self.program_counter.advance_n(4))?;
+            }
+            op if bits!(op; "0001_0xxx") => { // conditional jump
+                let a = Location::decode(memory, &mut self.program_counter)?;
+                let b = Location::decode(memory, &mut self.program_counter)?;
+                let dest = memory.read_word(self.program_counter.advance_n(4))?;
+                let value_a = self.get_value(memory, a)?;
+                let value_b = self.get_value(memory, b)?;
+
+                let result = match op & 0b111 {
+                    0b001 => value_a == value_b,
+                    0b010 => value_a != value_b,
+                    0b011 => value_a < value_b,
+                    0b100 => value_a <= value_b,
+                    0b101 => value_a >= value_b,
+                    0b110 => value_a > value_b,
+                    _ => return Err(CpuPanic::new())
+                };
+                if result {
+                    self.program_counter.address = dest;
+                }
             }
             _ => return Err(CpuPanic::new())
         }
@@ -47,12 +71,22 @@ impl Cpu {
         Ok(())
     }
 
-    fn get_value(&self, memory: &Memory, location: Location) -> CpuResult<u32> {
+    fn get_value(&mut self, memory: &Memory, location: Location) -> CpuResult<u32> {
         match location {
             Location::Immediate(value) => Ok(value),
             Location::Direct(direct) => self.get_direct(direct),
             Location::Indirect(direct, width) => {
                 let address = self.get_direct(direct)?;
+                memory.read_width(width, address)
+            },
+            Location::IndirectPostIncrement(direct, width) => {
+                let address = self.get_direct(direct)?;
+                self.set_direct(direct, address + width.size() as u32)?;
+                memory.read_width(width, address)
+            },
+            Location::IndirectPreDecrement(direct, width) => {
+                let address = self.get_direct(direct)? - width.size() as u32;
+                self.set_direct(direct, address)?;
                 memory.read_width(width, address)
             },
         }
@@ -79,6 +113,16 @@ impl Cpu {
             Location::Direct(direct) => self.set_direct(direct, value),
             Location::Indirect(direct, width) => {
                 let address = self.get_direct(direct)?;
+                memory.write_width(width, address, value)
+            },
+            Location::IndirectPostIncrement(direct, width) => {
+                let address = self.get_direct(direct)?;
+                self.set_direct(direct, address + width.size() as u32)?;
+                memory.write_width(width, address, value)
+            },
+            Location::IndirectPreDecrement(direct, width) => {
+                let address = self.get_direct(direct)? - width.size() as u32;
+                self.set_direct(direct, address)?;
                 memory.write_width(width, address, value)
             },
         }
@@ -115,8 +159,11 @@ enum Location {
     Immediate(u32),
     Direct(DirectAddress),
     Indirect(DirectAddress, DataWidth),
+    IndirectPostIncrement(DirectAddress, DataWidth),
+    IndirectPreDecrement(DirectAddress, DataWidth),
 }
 
+#[derive(Clone, Copy)]
 enum DirectAddress {
     Register(usize),
     Frame(usize),
@@ -143,6 +190,14 @@ impl Location {
             it if bits!(it; "1000_1xxx") => {
                 let width = DataWidth::decode(it);
                 Location::Indirect(read_direct(memory, pc,it)?, width)
+            },
+            it if bits!(it; "1001_0xxx") => {
+                let width = DataWidth::decode(it);
+                Location::IndirectPostIncrement(read_direct(memory, pc,it)?, width)
+            },
+            it if bits!(it; "1001_1xxx") => {
+                let width = DataWidth::decode(it);
+                Location::IndirectPreDecrement(read_direct(memory, pc,it)?, width)
             },
             _ => return Err(CpuPanic::new())
         });

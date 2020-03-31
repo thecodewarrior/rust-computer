@@ -61,7 +61,7 @@ pub fn setup_sim(sim_handle: &SimulatorHandle) {
 
     let mut thread_state = sim_handle.thread_state.write().unwrap();
     thread_state.paused.set_paused(false);
-    thread_state.frequency = 1.;
+    thread_state.frequency = 20.;
 }
 
 const MONO_FONT: Key<&str> = Key::new("rust-computer.mono_font");
